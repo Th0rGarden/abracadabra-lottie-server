@@ -1,7 +1,5 @@
 // Vercel Serverless Function - api/lottie.js
-
 // This function acts as a proxy to the LottieFiles API, adding caching.
-// It's designed to be deployed on Vercel's free tier.
 
 const LOTTIE_API_URL = 'https://lottiefiles.com/api/v2';
 
@@ -9,7 +7,7 @@ const LOTTIE_API_URL = 'https://lottiefiles.com/api/v2';
 const cache = new Map();
 
 export default async function handler(request, response) {
-    // Set CORS headers to allow requests from any origin (or lock it down if you prefer)
+    // Set CORS headers to allow requests from any origin
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -31,11 +29,11 @@ export default async function handler(request, response) {
     }
 
     try {
-        const lottieApiEndpoint = query 
+        const endpoint = query 
             ? `${LOTTIE_API_URL}/search?q=${encodeURIComponent(query)}&type=${type}`
             : `${LOTTIE_API_URL}/popular?type=${type}`;
 
-        const apiResponse = await fetch(lottieApiEndpoint);
+        const apiResponse = await fetch(endpoint);
 
         if (!apiResponse.ok) {
             throw new Error(`LottieFiles API responded with status: ${apiResponse.status}`);
