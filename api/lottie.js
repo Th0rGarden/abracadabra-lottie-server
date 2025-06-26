@@ -1,5 +1,5 @@
 // Vercel Serverless Function - api/lottie.js
-// This function acts as a proxy to the LottieFiles API, adding caching.
+// This function acts as a reliable, cached proxy to the LottieFiles API.
 
 const LOTTIE_API_URL = 'https://lottiefiles.com/api/v2';
 
@@ -7,7 +7,7 @@ const LOTTIE_API_URL = 'https://lottiefiles.com/api/v2';
 const cache = new Map();
 
 export default async function handler(request, response) {
-    // Set CORS headers to allow requests from any origin
+    // Set CORS headers to allow requests from any origin (like Obsidian)
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -29,14 +29,18 @@ export default async function handler(request, response) {
     }
 
     try {
-        const endpoint = query 
+        // This is the correct endpoint structure based on the MCP server's logic
+        const lottieApiEndpoint = query 
             ? `${LOTTIE_API_URL}/search?q=${encodeURIComponent(query)}&type=${type}`
             : `${LOTTIE_API_URL}/popular?type=${type}`;
 
-        const apiResponse = await fetch(endpoint);
+        const apiResponse = await fetch(lottieApiEndpoint);
 
         if (!apiResponse.ok) {
-            throw new Error(`LottieFiles API responded with status: ${apiResponse.status}`);
+            // Forward the exact error from LottieFiles for better debugging
+            const errorBody = await apiResponse.text();
+            console.error(`LottieFiles API Error (Status: ${apiResponse.status}):`, errorBody);
+            return response.status(apiResponse.status).json({ error: `LottieFiles API responded with status: ${apiResponse.status}` });
         }
 
         const data = await apiResponse.json();
@@ -44,11 +48,11 @@ export default async function handler(request, response) {
         // Cache the successful response
         cache.set(cacheKey, { data, timestamp: Date.now() });
 
-        // Forward the response to the client
+        // Forward the successful response to the client
         return response.status(200).json(data);
 
     } catch (error) {
-        console.error('Error fetching from LottieFiles API:', error);
+        console.error('Error proxying to LottieFiles API:', error);
         return response.status(500).json({ error: 'Failed to fetch data from LottieFiles API.' });
     }
 }
