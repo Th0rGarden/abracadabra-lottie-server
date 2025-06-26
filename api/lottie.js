@@ -1,13 +1,14 @@
+// [SOLUTION-ID: 035]
 // Vercel Serverless Function - api/lottie.js
 // This function acts as a reliable, cached proxy to the LottieFiles API.
 
-const LOTTIE_API_URL = 'https://lottiefiles.com/api/v2';
+const LOTTIE_API_BASE = 'https://lottiefiles.com/api/v2';
 
-// In-memory cache to reduce API calls for popular/repeated queries
+// In-memory cache to reduce API calls
 const cache = new Map();
 
 export default async function handler(request, response) {
-    // Set CORS headers to allow requests from any origin (like Obsidian)
+    // Set CORS headers
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -18,38 +19,45 @@ export default async function handler(request, response) {
 
     const { searchParams } = new URL(request.url, `https://${request.headers.host}`);
     const query = searchParams.get('q') || '';
-    const type = searchParams.get('type') || 'animation';
 
-    const cacheKey = `${query}-${type}`;
+    const cacheKey = query || 'popular';
     const cachedData = cache.get(cacheKey);
 
-    // Serve from cache if available and not older than 1 hour
-    if (cachedData && (Date.now() - cachedData.timestamp < 3600000)) {
+    if (cachedData && (Date.now() - cachedData.timestamp < 3600000)) { // 1 hour cache
         return response.status(200).json(cachedData.data);
     }
 
     try {
-        // This is the correct endpoint structure based on the MCP server's logic
-        const lottieApiEndpoint = query 
-            ? `${LOTTIE_API_URL}/search?q=${encodeURIComponent(query)}&type=${type}`
-            : `${LOTTIE_API_URL}/popular?type=${type}`;
+        let lottieApiEndpoint;
+        if (query) {
+            lottieApiEndpoint = `${LOTTIE_API_BASE}/search?q=${encodeURIComponent(query)}&type=animation`;
+        } else {
+            // This is the corrected endpoint for popular/featured animations
+            lottieApiEndpoint = `https://assets.lottiefiles.com/featured.json`;
+        }
 
         const apiResponse = await fetch(lottieApiEndpoint);
 
         if (!apiResponse.ok) {
-            // Forward the exact error from LottieFiles for better debugging
             const errorBody = await apiResponse.text();
             console.error(`LottieFiles API Error (Status: ${apiResponse.status}):`, errorBody);
             return response.status(apiResponse.status).json({ error: `LottieFiles API responded with status: ${apiResponse.status}` });
         }
 
         const data = await apiResponse.json();
+        
+        // The data structure is different for search vs. popular
+        let animations;
+        if (query) {
+            animations = data?.data?.results?.data || [];
+        } else {
+            animations = Array.isArray(data) ? data : [];
+        }
 
-        // Cache the successful response
-        cache.set(cacheKey, { data, timestamp: Date.now() });
+        const responseData = { animations };
+        cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
 
-        // Forward the successful response to the client
-        return response.status(200).json(data);
+        return response.status(200).json(responseData);
 
     } catch (error) {
         console.error('Error proxying to LottieFiles API:', error);
